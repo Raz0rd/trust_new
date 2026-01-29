@@ -31,14 +31,42 @@
                 <div class="balance" id="balance-display">$0.00</div>
                 <button id="settings-btn" class="icon-btn">⚙</button>
             </header>
+            
+            <!-- Active Numbers List -->
+            <div id="active-numbers-section" class="active-numbers-section hidden">
+                <h3>Números Ativos</h3>
+                <div id="active-numbers-list" class="active-numbers-list"></div>
+            </div>
 
             <!-- Status Area -->
             <div class="status-area">
                 <!-- Idle State -->
                 <div id="idle-state" class="state">
                     <div class="service-badge">Google</div>
-                    <p class="country-info">🇧🇷 Brasil</p>
+                    
+                    <div class="country-selector">
+                        <select id="country-select">
+                            <option value="73">🇧🇷 Brasil</option>
+                            <option value="40">🇮🇩 Indonésia</option>
+                            <option value="6">🇮🇳 Índia</option>
+                            <option value="72">🇵🇭 Filipinas</option>
+                            <option value="4">🇷🇺 Rússia</option>
+                            <option value="16">🇺🇦 Ucrânia</option>
+                            <option value="175">🇦🇺 Austrália</option>
+                            <option value="187">🇲🇽 México</option>
+                            <option value="117">🇵🇹 Portugal</option>
+                            <option value="12">🇺🇸 EUA</option>
+                        </select>
+                    </div>
+                    
+                    <div class="availability-info" id="availability-info">
+                        <span class="availability-count" id="availability-count">--</span>
+                        <span class="availability-label">disponíveis</span>
+                        <span class="availability-price" id="availability-price">$--</span>
+                    </div>
+                    
                     <button id="get-number-btn" class="btn-primary btn-large">Solicitar Número</button>
+                    <button id="refresh-availability-btn" class="btn-link">Atualizar disponibilidade</button>
                 </div>
 
                 <!-- Loading State -->
@@ -49,22 +77,64 @@
 
                 <!-- Active State -->
                 <div id="active-state" class="state hidden">
-                    <div class="phone-number" id="phone-number">+55 00 00000-0000</div>
-                    <button class="copy-btn" id="copy-btn">Copiar</button>
-                    
-                    <div class="countdown-container">
-                        <div class="countdown-ring">
-                            <svg viewBox="0 0 100 100">
-                                <circle class="bg" cx="50" cy="50" r="45"></circle>
-                                <circle class="progress" id="countdown-progress" cx="50" cy="50" r="45"></circle>
-                            </svg>
-                            <div class="countdown-text" id="countdown-text">20:00</div>
+                    <div class="activation-card">
+                        <!-- Header: Serviço + Número + Countdown -->
+                        <div class="card-header">
+                            <div class="service-info">
+                                <img src="https://cdn.hero-sms.com/assets/img/service/go0.webp" alt="Google" class="service-icon-lg">
+                                <div class="number-info">
+                                    <span class="phone-number" id="phone-number">+55 00 00000-0000</span>
+                                    <span class="number-cost" id="number-cost">$0.00</span>
+                                </div>
+                            </div>
+                            <div class="countdown-mini">
+                                <svg viewBox="0 0 36 36" class="countdown-circle">
+                                    <circle class="bg" cx="18" cy="18" r="16"></circle>
+                                    <circle class="progress" id="countdown-progress" cx="18" cy="18" r="16"></circle>
+                                </svg>
+                                <span class="countdown-text" id="countdown-text">20:00</span>
+                            </div>
+                        </div>
+                        
+                        <!-- SMS Area -->
+                        <div class="sms-area" id="sms-area">
+                            <div class="sms-placeholder" id="sms-placeholder">
+                                <span class="status-text" id="status-text">Aguardando SMS...</span>
+                            </div>
+                            <div class="sms-received hidden" id="sms-received">
+                                <div class="sms-code-box">
+                                    <span class="sms-label">Código:</span>
+                                    <span class="sms-code" id="sms-code">000000</span>
+                                </div>
+                                <div class="sms-full-text" id="sms-text"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="card-actions">
+                            <button class="action-btn copy" id="copy-btn" title="Copiar número">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span>Copiar</span>
+                            </button>
+                            <button class="action-btn refund" id="not-received-btn" title="Não chegou / Devolver">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                    <path d="M3 3v5h5"></path>
+                                </svg>
+                                <span>Devolver</span>
+                            </button>
+                            <button class="action-btn cancel" id="cancel-btn" title="Cancelar">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                                <span>Cancelar</span>
+                            </button>
                         </div>
                     </div>
-                    
-                    <p class="status-text" id="status-text">Aguardando SMS...</p>
-                    
-                    <button id="not-received-btn" class="btn-secondary">Não chegou</button>
                 </div>
 
                 <!-- SMS Received State -->

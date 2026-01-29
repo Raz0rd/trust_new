@@ -1,5 +1,5 @@
 const API_BASE = '/api/proxy';
-const BRAZIL_COUNTRY_ID = 73;
+const DEFAULT_COUNTRY_ID = 73;
 const GOOGLE_SERVICE_CODE = 'go';
 const DEFAULT_TIMEOUT_SECONDS = 1200; // 20 minutos
 const MIN_CANCEL_TIME = 120; // 2 minutos mínimo antes de poder cancelar
@@ -9,6 +9,7 @@ class TrustSMS {
         this.apiKey = localStorage.getItem('apiKey') || '';
         this.autoCancelEnabled = localStorage.getItem('autoCancel') !== 'false';
         this.cancelMargin = parseInt(localStorage.getItem('cancelMargin')) || 60;
+        this.selectedCountry = parseInt(localStorage.getItem('selectedCountry')) || DEFAULT_COUNTRY_ID;
         
         this.currentActivation = null;
         this.countdownInterval = null;
@@ -45,12 +46,16 @@ class TrustSMS {
         
         // Active state elements
         this.phoneNumberEl = document.getElementById('phone-number');
+        this.numberCostEl = document.getElementById('number-cost');
         this.copyBtn = document.getElementById('copy-btn');
         this.countdownProgress = document.getElementById('countdown-progress');
         this.countdownText = document.getElementById('countdown-text');
         this.statusText = document.getElementById('status-text');
         this.notReceivedBtn = document.getElementById('not-received-btn');
+        this.cancelBtn = document.getElementById('cancel-btn');
         this.getNumberBtn = document.getElementById('get-number-btn');
+        this.smsPlaceholder = document.getElementById('sms-placeholder');
+        this.smsReceivedEl = document.getElementById('sms-received');
         
         // SMS state elements
         this.smsCodeEl = document.getElementById('sms-code');
@@ -77,6 +82,16 @@ class TrustSMS {
         
         // Toast
         this.toast = document.getElementById('toast');
+        
+        // Country selector
+        this.countrySelect = document.getElementById('country-select');
+        this.availabilityCount = document.getElementById('availability-count');
+        this.availabilityPrice = document.getElementById('availability-price');
+        this.refreshAvailabilityBtn = document.getElementById('refresh-availability-btn');
+        
+        // Active numbers
+        this.activeNumbersSection = document.getElementById('active-numbers-section');
+        this.activeNumbersList = document.getElementById('active-numbers-list');
     }
     
     bindEvents() {
@@ -89,7 +104,12 @@ class TrustSMS {
         // Dashboard
         this.getNumberBtn.addEventListener('click', () => this.getNumber());
         this.copyBtn.addEventListener('click', () => this.copyPhoneNumber());
-        this.notReceivedBtn.addEventListener('click', () => this.cancelActivation('manual'));
+        this.notReceivedBtn.addEventListener('click', () => this.refundActivation());
+        this.cancelBtn.addEventListener('click', () => this.cancelActivation('manual'));
+        
+        // Country selector
+        this.countrySelect.addEventListener('change', () => this.onCountryChange());
+        this.refreshAvailabilityBtn.addEventListener('click', () => this.checkAvailability());
         
         // SMS state
         this.copyCodeBtn.addEventListener('click', () => this.copyCode());
@@ -127,6 +147,9 @@ class TrustSMS {
         this.setupScreen.classList.add('hidden');
         this.dashboardScreen.classList.remove('hidden');
         this.showState('idle');
+        this.countrySelect.value = this.selectedCountry;
+        this.checkAvailability();
+        this.fetchActiveNumbers();
     }
     
     showState(state) {
@@ -185,7 +208,8 @@ class TrustSMS {
         try {
             const result = await this.apiCall('getNumberV2', {
                 service: GOOGLE_SERVICE_CODE,
-                country: BRAZIL_COUNTRY_ID
+                country: this.selectedCountry,
+                maxPrice: 0.50
             });
             
             if (result.activationId) {
@@ -204,6 +228,14 @@ class TrustSMS {
     startActivation() {
         const phone = this.formatPhoneNumber(this.currentActivation.phoneNumber);
         this.phoneNumberEl.textContent = phone;
+        
+        // Show cost
+        const cost = this.currentActivation.activationCost || 0;
+        this.numberCostEl.textContent = `$${cost.toFixed(2)}`;
+        
+        // Reset SMS area
+        this.smsPlaceholder.classList.remove('hidden');
+        this.smsReceivedEl.classList.add('hidden');
         
         this.startTime = Date.now();
         this.totalSeconds = DEFAULT_TIMEOUT_SECONDS;
@@ -246,9 +278,9 @@ class TrustSMS {
         const seconds = remaining % 60;
         this.countdownText.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         
-        // Update progress ring
+        // Update progress ring (r=16, circumference = 2 * PI * 16 = 100.53)
         const progress = remaining / this.totalSeconds;
-        const circumference = 283; // 2 * PI * 45
+        const circumference = 100.53;
         const offset = circumference * (1 - progress);
         this.countdownProgress.style.strokeDashoffset = offset;
         
@@ -298,11 +330,43 @@ class TrustSMS {
     handleSmsReceived(sms) {
         this.stopTimers();
         
+        // Show SMS inline in the card
+        this.smsPlaceholder.classList.add('hidden');
+        this.smsReceivedEl.classList.remove('hidden');
         this.smsCodeEl.textContent = sms.code;
         this.smsTextEl.textContent = sms.text || '';
         
-        this.showState('sms');
         this.showToast('SMS recebido!');
+    }
+    
+    async refundActivation() {
+        if (!this.currentActivation) return;
+        
+        const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+        
+        if (elapsed < MIN_CANCEL_TIME) {
+            const remaining = MIN_CANCEL_TIME - elapsed;
+            this.showToast(`Aguarde ${remaining}s para devolver`);
+            return;
+        }
+        
+        this.statusText.textContent = 'Devolvendo...';
+        
+        try {
+            const result = await this.apiCall('setStatus', {
+                id: this.currentActivation.activationId,
+                status: 8
+            });
+            
+            if (result === 'ACCESS_CANCEL' || result === 'ACCESS_READY') {
+                this.handleCancelled('Número devolvido - sem cobrança');
+                this.fetchBalance();
+            } else {
+                this.showToast('Erro: ' + result);
+            }
+        } catch (error) {
+            this.showToast('Erro ao devolver');
+        }
     }
     
     scheduleAutoCancel() {
@@ -485,6 +549,162 @@ class TrustSMS {
     
     closeSettings() {
         this.settingsModal.classList.add('hidden');
+    }
+    
+    // Active Numbers Methods
+    async fetchActiveNumbers() {
+        try {
+            console.log('Buscando números ativos...');
+            const result = await this.apiCall('getActiveActivations');
+            console.log('Resultado:', result);
+            
+            if (result.status === 'success' && result.activeActivations) {
+                const activations = result.activeActivations.rows || [];
+                console.log('Ativações encontradas:', activations.length);
+                this.renderActiveNumbers(activations);
+            } else {
+                console.log('Nenhuma ativação ou erro:', result);
+                this.activeNumbersSection.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Erro ao buscar números ativos:', error);
+            this.activeNumbersSection.classList.add('hidden');
+        }
+    }
+    
+    renderActiveNumbers(activations) {
+        if (!activations || activations.length === 0) {
+            this.activeNumbersSection.classList.add('hidden');
+            return;
+        }
+        
+        this.activeNumbersSection.classList.remove('hidden');
+        this.activeNumbersList.innerHTML = activations.map(act => {
+            const phone = this.formatPhone(act.phoneNumber);
+            const hasSms = act.smsCode ? 'has-sms' : '';
+            const serviceIcon = `https://cdn.hero-sms.com/assets/img/service/${act.serviceCode}0.webp`;
+            const countryFlag = this.getCountryFlag(act.countryCode);
+            
+            const smsBox = act.smsCode ? `
+                <div class="active-number-sms-box">
+                    <img src="${serviceIcon}" class="sms-icon" alt="">
+                    SMS code: ${act.smsCode}
+                </div>
+            ` : '';
+            
+            return `
+                <div class="active-number-item ${hasSms}" data-id="${act.activationId}">
+                    <div class="active-number-info">
+                        <div class="active-number-icons">
+                            <img src="${serviceIcon}" class="service-icon" alt="Google">
+                            <span class="country-flag">${countryFlag}</span>
+                        </div>
+                        <div class="active-number-details">
+                            <span class="active-number-phone">${phone}</span>
+                            <span class="active-number-meta">$${act.activationCost}</span>
+                        </div>
+                    </div>
+                    <div class="active-number-actions">
+                        <button class="btn-small select" onclick="app.selectActiveNumber('${act.activationId}')">Usar</button>
+                        <button class="btn-small cancel" onclick="app.cancelActiveNumber('${act.activationId}')">✕</button>
+                    </div>
+                </div>
+                ${smsBox}
+            `;
+        }).join('');
+    }
+    
+    getCountryFlag(countryCode) {
+        const flags = {
+            '73': '🇧🇷',
+            '40': '🇮🇩',
+            '6': '🇮🇳',
+            '72': '🇵🇭',
+            '4': '🇷🇺',
+            '16': '🇺🇦',
+            '175': '🇦🇺',
+            '187': '🇲🇽',
+            '117': '🇵🇹',
+            '12': '🇺🇸'
+        };
+        return flags[countryCode] || '🌐';
+    }
+    
+    async selectActiveNumber(activationId) {
+        const result = await this.apiCall('getActiveActivations');
+        if (result.status === 'success') {
+            const act = result.activeActivations.rows.find(a => a.activationId === activationId);
+            if (act) {
+                this.currentActivation = {
+                    activationId: act.activationId,
+                    phoneNumber: act.phoneNumber,
+                    activationCost: act.activationCost,
+                    activationTime: act.activationTime,
+                    activationEndTime: act.estDate
+                };
+                this.startActivation();
+            }
+        }
+    }
+    
+    async cancelActiveNumber(activationId) {
+        try {
+            const result = await this.apiCall('setStatus', { id: activationId, status: 8 });
+            if (result === 'ACCESS_CANCEL') {
+                this.showToast('Número cancelado');
+                this.fetchActiveNumbers();
+                this.fetchBalance();
+            } else {
+                this.showToast('Erro: ' + result);
+            }
+        } catch (error) {
+            this.showToast('Erro ao cancelar');
+        }
+    }
+    
+    // Country & Availability Methods
+    onCountryChange() {
+        this.selectedCountry = parseInt(this.countrySelect.value);
+        localStorage.setItem('selectedCountry', this.selectedCountry);
+        this.checkAvailability();
+    }
+    
+    async checkAvailability() {
+        this.availabilityCount.textContent = '...';
+        this.availabilityCount.classList.remove('zero');
+        this.availabilityPrice.textContent = '';
+        
+        try {
+            const result = await this.apiCall('getPrices', {
+                service: GOOGLE_SERVICE_CODE,
+                country: this.selectedCountry
+            });
+            
+            // Parse result - format: {"73":{"go":{"cost":0.24,"count":357539,"physicalCount":0}}}
+            const countryData = result[this.selectedCountry];
+            if (countryData && countryData[GOOGLE_SERVICE_CODE]) {
+                const data = countryData[GOOGLE_SERVICE_CODE];
+                const count = data.count || 0;
+                const price = data.cost || 0;
+                
+                this.availabilityCount.textContent = count;
+                this.availabilityPrice.textContent = `$${price.toFixed(2)}`;
+                
+                if (count === 0) {
+                    this.availabilityCount.classList.add('zero');
+                } else {
+                    this.availabilityCount.classList.remove('zero');
+                }
+            } else {
+                this.availabilityCount.textContent = '0';
+                this.availabilityCount.classList.add('zero');
+                this.availabilityPrice.textContent = '--';
+            }
+        } catch (error) {
+            console.error('Erro ao verificar disponibilidade:', error);
+            this.availabilityCount.textContent = '?';
+            this.availabilityPrice.textContent = '';
+        }
     }
     
     // Utility Methods

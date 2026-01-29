@@ -12,6 +12,7 @@ app.use(express.static(path.join(__dirname, '.')));
 
 // Proxy endpoint for HeroSMS API
 app.get('/api/proxy', async (req, res) => {
+    console.log('Requisição recebida:', req.query);
     try {
         const { api_key, action, ...params } = req.query;
         
