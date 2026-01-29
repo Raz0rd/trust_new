@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: trust-sms
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trust SMS</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Setup Screen -->
+        <div id="setup-screen" class="screen">
+            <div class="setup-container">
+                <h1>Trust SMS</h1>
+                <p class="subtitle">Configure sua API Key</p>
+                
+                <div class="input-group">
+                    <input type="password" id="api-key-input" placeholder="Cole sua API Key aqui">
+                </div>
+                
+                <button id="save-config-btn" class="btn-primary">Salvar e Continuar</button>
+                
+                <p class="hint">Obtenha sua API Key em hero-sms.com</p>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboard-screen" class="screen hidden">
+            <!-- Header -->
+            <header class="header">
+                <div class="balance" id="balance-display">$0.00</div>
+                <button id="settings-btn" class="icon-btn">⚙</button>
+            </header>
+
+            <!-- Status Area -->
+            <div class="status-area">
+                <!-- Idle State -->
+                <div id="idle-state" class="state">
+                    <div class="service-badge">Google</div>
+                    <p class="country-info">🇧🇷 Brasil</p>
+                    <button id="get-number-btn" class="btn-primary btn-large">Solicitar Número</button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading-state" class="state hidden">
+                    <div class="spinner"></div>
+                    <p>Obtendo número...</p>
+                </div>
+
+                <!-- Active State -->
+                <div id="active-state" class="state hidden">
+                    <div class="phone-number" id="phone-number">+55 00 00000-0000</div>
+                    <button class="copy-btn" id="copy-btn">Copiar</button>
+                    
+                    <div class="countdown-container">
+                        <div class="countdown-ring">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="bg" cx="50" cy="50" r="45"></circle>
+                                <circle class="progress" id="countdown-progress" cx="50" cy="50" r="45"></circle>
+                            </svg>
+                            <div class="countdown-text" id="countdown-text">20:00</div>
+                        </div>
+                    </div>
+                    
+                    <p class="status-text" id="status-text">Aguardando SMS...</p>
+                    
+                    <button id="not-received-btn" class="btn-secondary">Não chegou</button>
+                </div>
+
+                <!-- SMS Received State -->
+                <div id="sms-state" class="state hidden">
+                    <div class="success-icon">✓</div>
+                    <p class="sms-label">Código recebido:</p>
+                    <div class="sms-code" id="sms-code">000000</div>
+                    <button class="copy-btn" id="copy-code-btn">Copiar Código</button>
+                    
+                    <div class="sms-text" id="sms-text"></div>
+                    
+                    <button id="confirm-btn" class="btn-primary">Confirmar e Finalizar</button>
+                    <button id="new-number-btn" class="btn-secondary">Novo Número</button>
+                </div>
+
+                <!-- Error State -->
+                <div id="error-state" class="state hidden">
+                    <div class="error-icon">!</div>
+                    <p class="error-text" id="error-text">Erro desconhecido</p>
+                    <button id="retry-btn" class="btn-primary">Tentar Novamente</button>
+                </div>
+
+                <!-- Cancelled State -->
+                <div id="cancelled-state" class="state hidden">
+                    <div class="cancelled-icon">✕</div>
+                    <p class="cancelled-text">Número cancelado</p>
+                    <p class="cancelled-reason" id="cancelled-reason"></p>
+                    <button id="new-btn" class="btn-primary">Solicitar Novo Número</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Configurações</h2>
+                
+                <div class="setting-item">
+                    <label>API Key</label>
+                    <input type="password" id="settings-api-key" placeholder="API Key">
+                </div>
+                
+                <div class="setting-item">
+                    <label>Auto-cancelar antes do timeout</label>
+                    <div class="toggle-container">
+                        <input type="checkbox" id="auto-cancel-toggle" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <label>Segundos antes do timeout</label>
+                    <input type="number" id="cancel-margin" value="60" min="30" max="300">
+                </div>
+                
+                <div class="modal-actions">
+                    <button id="save-settings-btn" class="btn-primary">Salvar</button>
+                    <button id="close-settings-btn" class="btn-secondary">Fechar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
