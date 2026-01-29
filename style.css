@@ -97,6 +97,12 @@ body {
     color: var(--text-muted);
 }
 
+.error-text {
+    font-size: 14px;
+    color: var(--error);
+    margin-top: 16px;
+}
+
 /* Buttons */
 .btn-primary {
     background: var(--primary);

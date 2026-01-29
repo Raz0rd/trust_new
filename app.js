@@ -3,6 +3,8 @@ const DEFAULT_COUNTRY_ID = 73;
 const GOOGLE_SERVICE_CODE = 'go';
 const DEFAULT_TIMEOUT_SECONDS = 1200; // 20 minutos
 const MIN_CANCEL_TIME = 120; // 2 minutos mínimo antes de poder cancelar
+const ACCESS_PASSWORD = '2026ftw@';
+const AUTH_CACHE_DAYS = 30;
 
 class TrustSMS {
     constructor() {
@@ -20,13 +22,50 @@ class TrustSMS {
         
         this.initElements();
         this.bindEvents();
-        this.init();
+        this.checkAuth();
+    }
+    
+    checkAuth() {
+        const authToken = localStorage.getItem('authToken');
+        const authExpiry = localStorage.getItem('authExpiry');
+        
+        if (authToken && authExpiry && Date.now() < parseInt(authExpiry)) {
+            this.loginScreen.classList.add('hidden');
+            this.init();
+        } else {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('authExpiry');
+            this.loginScreen.classList.remove('hidden');
+        }
+    }
+    
+    handleLogin() {
+        const password = this.loginPasswordInput.value;
+        
+        if (password === ACCESS_PASSWORD) {
+            const expiry = Date.now() + (AUTH_CACHE_DAYS * 24 * 60 * 60 * 1000);
+            localStorage.setItem('authToken', 'authenticated');
+            localStorage.setItem('authExpiry', expiry.toString());
+            
+            this.loginScreen.classList.add('hidden');
+            this.loginError.classList.add('hidden');
+            this.init();
+        } else {
+            this.loginError.classList.remove('hidden');
+            this.loginPasswordInput.value = '';
+        }
     }
     
     initElements() {
         // Screens
+        this.loginScreen = document.getElementById('login-screen');
         this.setupScreen = document.getElementById('setup-screen');
         this.dashboardScreen = document.getElementById('dashboard-screen');
+        
+        // Login
+        this.loginPasswordInput = document.getElementById('login-password');
+        this.loginBtn = document.getElementById('login-btn');
+        this.loginError = document.getElementById('login-error');
         
         // Setup
         this.apiKeyInput = document.getElementById('api-key-input');
@@ -95,6 +134,12 @@ class TrustSMS {
     }
     
     bindEvents() {
+        // Login
+        this.loginBtn.addEventListener('click', () => this.handleLogin());
+        this.loginPasswordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.handleLogin();
+        });
+        
         // Setup
         this.saveConfigBtn.addEventListener('click', () => this.saveConfig());
         this.apiKeyInput.addEventListener('keypress', (e) => {

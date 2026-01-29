@@ -8,8 +8,24 @@
 </head>
 <body>
     <div id="app">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen">
+            <div class="setup-container">
+                <h1>🔒 Trust SMS</h1>
+                <p class="subtitle">Digite a senha para acessar</p>
+                
+                <div class="input-group">
+                    <input type="password" id="login-password" placeholder="Senha">
+                </div>
+                
+                <button id="login-btn" class="btn-primary">Entrar</button>
+                
+                <p id="login-error" class="error-text hidden">Senha incorreta</p>
+            </div>
+        </div>
+
         <!-- Setup Screen -->
-        <div id="setup-screen" class="screen">
+        <div id="setup-screen" class="screen hidden">
             <div class="setup-container">
                 <h1>Trust SMS</h1>
                 <p class="subtitle">Configure sua API Key</p>
