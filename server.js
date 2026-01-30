@@ -31,6 +31,11 @@ app.get('/api/proxy', async (req, res) => {
         const response = await fetch(url.toString());
         const text = await response.text();
         
+        console.log('=== RESPOSTA API ===');
+        console.log('Action:', action);
+        console.log('Response:', text);
+        console.log('====================');
+        
         // Try to parse as JSON
         try {
             const json = JSON.parse(text);

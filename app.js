@@ -5,6 +5,8 @@ const DEFAULT_TIMEOUT_SECONDS = 1200; // 20 minutos
 const MIN_CANCEL_TIME = 120; // 2 minutos mínimo antes de poder cancelar
 const ACCESS_PASSWORD = '2026ftw@';
 const AUTH_CACHE_DAYS = 30;
+const MAX_PRICE_USD = 0.70;
+const USD_TO_BRL = 6.00; // Taxa de conversão USD -> BRL
 
 class TrustSMS {
     constructor() {
@@ -254,7 +256,7 @@ class TrustSMS {
             const result = await this.apiCall('getNumberV2', {
                 service: GOOGLE_SERVICE_CODE,
                 country: this.selectedCountry,
-                maxPrice: 0.50
+                maxPrice: MAX_PRICE_USD
             });
             
             if (result.activationId) {
@@ -274,9 +276,10 @@ class TrustSMS {
         const phone = this.formatPhoneNumber(this.currentActivation.phoneNumber);
         this.phoneNumberEl.textContent = phone;
         
-        // Show cost
-        const cost = this.currentActivation.activationCost || 0;
-        this.numberCostEl.textContent = `$${cost.toFixed(2)}`;
+        // Show cost in BRL
+        const costUSD = this.currentActivation.activationCost || 0;
+        const costBRL = costUSD * USD_TO_BRL;
+        this.numberCostEl.textContent = `R$ ${costBRL.toFixed(2)}`;
         
         // Reset SMS area
         this.smsPlaceholder.classList.remove('hidden');
@@ -720,20 +723,26 @@ class TrustSMS {
         this.availabilityPrice.textContent = '';
         
         try {
-            const result = await this.apiCall('getPrices', {
+            const result = await this.apiCall('getTopCountriesByService', {
                 service: GOOGLE_SERVICE_CODE,
-                country: this.selectedCountry
+                freePrice: 'true'
             });
             
-            // Parse result - format: {"73":{"go":{"cost":0.24,"count":357539,"physicalCount":0}}}
-            const countryData = result[this.selectedCountry];
-            if (countryData && countryData[GOOGLE_SERVICE_CODE]) {
-                const data = countryData[GOOGLE_SERVICE_CODE];
-                const count = data.count || 0;
-                const price = data.cost || 0;
+            console.log('=== RESPOSTA getTopCountriesByService ===');
+            console.log('Country:', this.selectedCountry);
+            console.log('Result:', JSON.stringify(result, null, 2));
+            
+            // Parse result - format: {"1":{"country":73,"count":232924,"price":0.27,...},...}
+            // Buscar o item onde country === selectedCountry
+            const countryData = Object.values(result).find(item => item.country === this.selectedCountry);
+            
+            if (countryData) {
+                const count = countryData.count || 0;
+                const priceUSD = countryData.price || countryData.retail_price || 0;
+                const priceBRL = priceUSD * USD_TO_BRL;
                 
-                this.availabilityCount.textContent = count;
-                this.availabilityPrice.textContent = `$${price.toFixed(2)}`;
+                this.availabilityCount.textContent = count.toLocaleString();
+                this.availabilityPrice.textContent = `R$ ${priceBRL.toFixed(2)}`;
                 
                 if (count === 0) {
                     this.availabilityCount.classList.add('zero');
