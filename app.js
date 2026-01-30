@@ -7,6 +7,7 @@ const ACCESS_PASSWORD = '2026ftw@';
 const AUTH_CACHE_DAYS = 30;
 const MAX_PRICE_USD = 0.70;
 const USD_TO_BRL = 6.00; // Taxa de conversão USD -> BRL
+const AUTO_SWAP_TIME = 180; // 3 minutos para trocar número se não receber SMS
 
 class TrustSMS {
     constructor() {
@@ -19,6 +20,7 @@ class TrustSMS {
         this.countdownInterval = null;
         this.statusCheckInterval = null;
         this.autoCancelTimeout = null;
+        this.autoSwapTimeout = null;
         this.startTime = null;
         this.totalSeconds = DEFAULT_TIMEOUT_SECONDS;
         
@@ -97,6 +99,7 @@ class TrustSMS {
         this.getNumberBtn = document.getElementById('get-number-btn');
         this.smsPlaceholder = document.getElementById('sms-placeholder');
         this.smsReceivedEl = document.getElementById('sms-received');
+        this.confirmSmsBtn = document.getElementById('confirm-sms-btn');
         
         // SMS state elements
         this.smsCodeEl = document.getElementById('sms-code');
@@ -153,6 +156,7 @@ class TrustSMS {
         this.copyBtn.addEventListener('click', () => this.copyPhoneNumber());
         this.notReceivedBtn.addEventListener('click', () => this.refundActivation());
         this.cancelBtn.addEventListener('click', () => this.cancelActivation('manual'));
+        this.confirmSmsBtn.addEventListener('click', () => this.confirmActivation());
         
         // Country selector
         this.countrySelect.addEventListener('change', () => this.onCountryChange());
@@ -292,6 +296,7 @@ class TrustSMS {
         this.startCountdown();
         this.startStatusCheck();
         this.scheduleAutoCancel();
+        this.scheduleAutoSwap();
         this.fetchBalance();
     }
     
@@ -434,6 +439,134 @@ class TrustSMS {
         }, autoCancelTime);
     }
     
+    scheduleAutoSwap() {
+        // Mostrar modal perguntando se deseja trocar após 3 minutos sem SMS
+        this.autoSwapTimeout = setTimeout(() => {
+            if (this.currentActivation && !this.smsReceivedEl.classList.contains('hidden') === false) {
+                this.showSwapConfirmModal();
+            }
+        }, AUTO_SWAP_TIME * 1000);
+    }
+    
+    showSwapConfirmModal() {
+        const currentPhone = this.formatPhoneNumber(this.currentActivation.phoneNumber);
+        
+        const modal = document.createElement('div');
+        modal.className = 'swap-modal';
+        modal.innerHTML = `
+            <div class="swap-modal-content">
+                <div class="swap-icon">⏰</div>
+                <h3>SMS não chegou</h3>
+                <p>Já se passaram 3 minutos e o SMS ainda não chegou para este número:</p>
+                <div class="swap-details">
+                    <div class="swap-current">
+                        <span class="number">${currentPhone}</span>
+                    </div>
+                </div>
+                <p class="swap-question">Deseja solicitar outro número?</p>
+                <div class="swap-buttons">
+                    <button class="swap-no-btn">Não, aguardar</button>
+                    <button class="swap-yes-btn">Sim, trocar</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        modal.querySelector('.swap-no-btn').addEventListener('click', () => {
+            modal.remove();
+            // Reagendar verificação para mais 3 minutos
+            this.scheduleAutoSwap();
+        });
+        
+        modal.querySelector('.swap-yes-btn').addEventListener('click', async () => {
+            modal.remove();
+            await this.swapNumber();
+        });
+    }
+    
+    async swapNumber() {
+        if (!this.currentActivation) return;
+        
+        const oldPhone = this.formatPhoneNumber(this.currentActivation.phoneNumber);
+        
+        // Cancelar número atual (status 8 = cancel)
+        try {
+            await this.apiCall('setStatus', {
+                id: this.currentActivation.activationId,
+                status: 8
+            });
+        } catch (error) {
+            console.error('Erro ao cancelar número antigo:', error);
+        }
+        
+        this.stopTimers();
+        this.currentActivation = null;
+        
+        // Buscar novo número
+        this.statusText.textContent = 'Buscando novo número...';
+        this.showState('loading');
+        
+        try {
+            const result = await this.apiCall('getNumberV2', {
+                service: GOOGLE_SERVICE_CODE,
+                country: this.selectedCountry,
+                maxPrice: MAX_PRICE_USD
+            });
+            
+            if (result.activationId) {
+                this.currentActivation = result;
+                this.startActivation();
+                this.showSwapSuccessAlert(oldPhone);
+            } else {
+                this.handleError('NO_NUMBERS');
+            }
+        } catch (error) {
+            this.handleError(error.message);
+        }
+    }
+    
+    showSwapSuccessAlert(oldPhone) {
+        const newPhone = this.formatPhoneNumber(this.currentActivation.phoneNumber);
+        const costBRL = (this.currentActivation.activationCost || 0) * USD_TO_BRL;
+        
+        const modal = document.createElement('div');
+        modal.className = 'swap-modal';
+        modal.innerHTML = `
+            <div class="swap-modal-content">
+                <div class="swap-icon">✅</div>
+                <h3>Número Trocado!</h3>
+                <p>Seu número foi trocado com sucesso.</p>
+                <div class="swap-details">
+                    <div class="swap-old">
+                        <span class="label">Anterior:</span>
+                        <span class="number">${oldPhone}</span>
+                    </div>
+                    <div class="swap-new">
+                        <span class="label">Novo:</span>
+                        <span class="number">${newPhone}</span>
+                    </div>
+                    <div class="swap-cost">
+                        <span class="label">Custo:</span>
+                        <span class="price">R$ ${costBRL.toFixed(2)}</span>
+                    </div>
+                </div>
+                <button class="swap-ok-btn">Entendi</button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        modal.querySelector('.swap-ok-btn').addEventListener('click', () => {
+            modal.remove();
+        });
+        
+        // Fechar ao clicar fora
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+    }
+    
     async cancelActivation(reason = 'manual') {
         if (!this.currentActivation) return;
         
@@ -550,6 +683,10 @@ class TrustSMS {
         if (this.autoCancelTimeout) {
             clearTimeout(this.autoCancelTimeout);
             this.autoCancelTimeout = null;
+        }
+        if (this.autoSwapTimeout) {
+            clearTimeout(this.autoSwapTimeout);
+            this.autoSwapTimeout = null;
         }
     }
     
